@@ -1,5 +1,6 @@
 from datetime import datetime
 import os
+import argparse
 from collections import defaultdict
 import pandas as pd
 from http.server import HTTPServer, SimpleHTTPRequestHandler
@@ -14,7 +15,7 @@ def setup_jinja_environment():
     )
 
 
-def year_form(num: int, first: str = "год", second: str = "года", third: str = "лет") -> str:
+def format_year(num: int, first: str = "год", second: str = "года", third: str = "лет") -> str:
     """Returns the correct year form based on the given number."""
     if 4 < num < 21:
         return third
@@ -26,7 +27,7 @@ def year_form(num: int, first: str = "год", second: str = "года", third: 
     return third
 
 
-def load_data(file_path: str) -> list:
+def load_wines_data(file_path: str) -> list:
     """Loads data from an Excel file and returns it as a list of dictionaries."""
     return pd.read_excel(
         io=file_path,
@@ -35,12 +36,12 @@ def load_data(file_path: str) -> list:
     ).to_dict(orient="records")
 
 
-def process_drinks_data(data: list) -> tuple:
+def categorize_wines(drinks_data: list) -> tuple:
     """Processes drinks data into categories and finds the lowest price."""
     all_drinks = defaultdict(list)
     lowest_price = None
 
-    for drink in data:
+    for drink in drinks_data:
         category = drink['Категория']
         all_drinks[category].append(drink)
 
@@ -69,21 +70,29 @@ def save_rendered_page(content: str, file_path: str):
 def start_server():
     """Starts the HTTP server."""
     server = HTTPServer(('0.0.0.0', 8000), SimpleHTTPRequestHandler)
-
     server.serve_forever()
 
 
 def main():
+    # Command-line argument parsing
+    parser = argparse.ArgumentParser(description="Wine Data Processing")
+    parser.add_argument("--path", default=os.getenv("WINE_DATA_PATH", "wine.xlsx"),
+                        help="Path to the Excel file containing wine data.")
+    args = parser.parse_args()
 
+    wine_data_path = args.path
+
+    # Setup and template rendering
     env = setup_jinja_environment()
     template = env.get_template("template.html")
 
     today = datetime.now().year
-    difference_in_years = today - 1920
-    formatted_year = year_form(difference_in_years)
+    year_of_establishment = 1920
+    difference_in_years = today - year_of_establishment
+    formatted_year = format_year(difference_in_years)
 
-    data = load_data(os.path.join(os.path.dirname(__file__), "wine.xlsx"))
-    drinks, lowest_price = process_drinks_data(data)
+    all_wines_data = load_wines_data(wine_data_path)
+    drinks, lowest_price = categorize_wines(all_wines_data)
 
     rendered_page = render_html(
         template, difference_in_years, formatted_year, drinks, lowest_price)
